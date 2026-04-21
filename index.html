@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+<style>
+html, body {
+  margin:0;
+  padding:0;
+  overflow:hidden;
+  background:black;
+}
+
+/* 📷 카메라 */
+video {
+  position:fixed;
+  top:0;
+  left:0;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  z-index:0;
+}
+
+/* ✨ 드론 */
+canvas {
+  position:fixed;
+  top:0;
+  left:0;
+  width:100%;
+  height:100%;
+  z-index:1;
+}
+
+/* 🔘 버튼 */
+.btn {
+  position:fixed;
+  bottom:40px;
+  z-index:10;
+  padding:18px 28px;
+  font-size:18px;
+  border-radius:50px;
+  border:none;
+}
+
+/* 📷 카메라 */
+.camBtn {
+  left:30%;
+  transform:translateX(-50%);
+  background:black;
+  color:red;
+}
+
+/* 📱 앱 */
+.appBtn {
+  left:70%;
+  transform:translateX(-50%);
+  background:red;
+  color:white;
+}
+
+/* 📥 메시지 리스트 */
+#msgList {
+  position:fixed;
+  top:15px;
+  right:10px;
+  z-index:20;
+  color:white;
+  font-size:13px;
+  background:rgba(0,0,0,0.5);
+  padding:8px;
+  border-radius:10px;
+  max-width:160px;
+}
+</style>
+
+</head>
+
+<body>
+
+<video id="video" autoplay playsinline></video>
+<canvas id="c"></canvas>
+
+<button class="btn camBtn" onclick="startCamera()">📷 Camera</button>
+<button class="btn appBtn" onclick="installApp()">📱 App</button>
+
+<div id="msgList"></div>
+
+<script>
+
+let started = false;
+let particles = [];
+
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+
+function resize(){
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resize();
+window.onresize = resize;
+
+// =======================
+// 📷 카메라
+// =======================
+async function startCamera(){
+
+    if(started) return;
+
+    try{
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "environment" }
+        });
+
+        document.getElementById("video").srcObject = stream;
+
+        initParticles(text);
+        started = true;
+        draw();
+
+    }catch(e){
+        alert("카메라 실행 실패");
+    }
+}
+
+// =======================
+// 📱 앱 설치
+// =======================
+function installApp(){
+    window.location.href =
+    "https://play.google.com/store/apps/details?id=com.example.hearmesky";
+}
+
+// =======================
+// 💬 메시지
+// =======================
+const params = new URLSearchParams(location.search);
+const text = params.get("msg") || "We Love Gina";
+
+function saveMessage(msg){
+    let list = JSON.parse(localStorage.getItem("msgs") || "[]");
+
+    list.push({
+        text: msg,
+        time: Date.now(),
+        ttl: 60000
+    });
+
+    localStorage.setItem("msgs", JSON.stringify(list));
+}
+
+function drawList(){
+
+    const listDiv = document.getElementById("msgList");
+
+    let list = JSON.parse(localStorage.getItem("msgs") || "[]");
+    let now = Date.now();
+
+    list = list.filter(m => now - m.time < m.ttl);
+    localStorage.setItem("msgs", JSON.stringify(list));
+
+    listDiv.innerHTML = "";
+
+    list.forEach(m => {
+
+        let remain = Math.floor((m.ttl - (now - m.time)) / 1000);
+
+        const div = document.createElement("div");
+        div.innerHTML = `${m.text} (${remain}s)`;
+
+        div.onclick = () => {
+            initParticles(m.text);
+        };
+
+        listDiv.appendChild(div);
+    });
+}
+
+setInterval(drawList, 1000);
+
+// =======================
+// ✨ 텍스트 → 입자 (🔥 핵심 수정)
+// =======================
+function initParticles(customText){
+
+    const off = document.createElement("canvas");
+    const offCtx = off.getContext("2d");
+
+    off.width = canvas.width;
+    off.height = canvas.height;
+
+    offCtx.fillStyle = "white";
+
+    // 🔥 화면 맞춤 폰트
+    let fontSize = Math.min(canvas.width / 7, canvas.height / 4);
+
+    offCtx.font = `bold ${fontSize}px Arial`;
+    offCtx.textAlign = "center";
+    offCtx.textBaseline = "middle";
+
+    offCtx.fillText(customText, canvas.width/2, canvas.height/2);
+
+    const imgData = offCtx.getImageData(0,0,off.width,off.height);
+
+    particles = [];
+
+    for(let y=0;y<off.height;y+=6){
+        for(let x=0;x<off.width;x+=6){
+
+            let i = (y * off.width + x) * 4;
+
+            if(imgData.data[i+3] > 128){
+                particles.push({
+                    x: Math.random()*canvas.width,
+                    y: Math.random()*canvas.height,
+                    tx: x,
+                    ty: y
+                });
+            }
+        }
+    }
+}
+
+// =======================
+// 🎬 애니메이션
+// =======================
+function draw(){
+
+    if(!started) return;
+
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    ctx.fillStyle="white";
+
+    particles.forEach(p=>{
+
+        p.x += (p.tx - p.x)*0.05;
+        p.y += (p.ty - p.y)*0.05;
+
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,2,0,Math.PI*2);
+        ctx.fill();
+    });
+
+    requestAnimationFrame(draw);
+}
+
+// 초기 저장
+saveMessage(text);
+
+</script>
+
+</body>
+</html>
